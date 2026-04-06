@@ -28,7 +28,7 @@ end
 ---@return integer
 local function clamped_height(line_count)
   local max_h = math.floor(vim.o.lines * MAX_HEIGHT_RATIO)
-  return math.max(MIN_HEIGHT, math.min(line_count, max_h))
+  return math.max(1, math.min(line_count, max_h))
 end
 
 ---Adjust floating window height to fit content (native fallback)
@@ -136,7 +136,14 @@ function M.append_to_buffer(lines, buf, win, opts)
     if not vim.api.nvim_buf_is_valid(buf) then
       return
     end
-    vim.api.nvim_buf_set_lines(buf, -1, -1, false, cleaned)
+
+    -- On first write, replace the empty initial line instead of appending after it
+    local first_line = vim.api.nvim_buf_get_lines(buf, 0, 1, false)
+    if #first_line == 1 and first_line[1] == '' and vim.api.nvim_buf_line_count(buf) == 1 then
+      vim.api.nvim_buf_set_lines(buf, 0, 1, false, cleaned)
+    else
+      vim.api.nvim_buf_set_lines(buf, -1, -1, false, cleaned)
+    end
 
     -- Scroll to bottom
     if vim.api.nvim_win_is_valid(win) then
