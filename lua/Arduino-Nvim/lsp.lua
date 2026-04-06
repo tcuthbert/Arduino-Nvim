@@ -40,7 +40,23 @@ function M.setup()
   })
 end
 
----Create or update sketch.yaml to match current board/port config
+---Write sketch.yaml content with current config
+---@param yaml_file string
+---@param board string
+---@param port string
+---@param baudrate string|number
+local function write_sketch_yaml(yaml_file, board, port, baudrate)
+  local file = io.open(yaml_file, 'w')
+  if file then
+    file:write('default_fqbn: ' .. board .. '\n')
+    file:write('default_port: ' .. port .. '\n')
+    file:write('port_config:\n')
+    file:write('  baudrate: ' .. tostring(baudrate) .. '\n')
+    file:close()
+  end
+end
+
+---Create or update sketch.yaml to match current board/port/baudrate config
 ---@param board string
 ---@param port string
 function M._ensure_sketch_yaml(board, port)
@@ -50,31 +66,37 @@ function M._ensure_sketch_yaml(board, port)
     return
   end
 
+  local ino = require('Arduino-Nvim')
+  local baudrate = ino.baudrate
+
   if vim.fn.filereadable(yaml_file) == 0 then
-    local file = io.open(yaml_file, 'w')
-    if file then
-      file:write('default_fqbn: ' .. board .. '\n')
-      file:write('default_port: ' .. port .. '\n')
-      file:close()
-    end
+    write_sketch_yaml(yaml_file, board, port, baudrate)
     return
   end
 
+  -- Simple flat parse for top-level and one-level nested keys
   local current = {}
+  local section = nil
   for line in io.lines(yaml_file) do
-    local key, value = line:match('(%S+):%s*(%S+)')
-    if key and value then
-      current[key] = value
+    local nested_key, nested_val = line:match('^%s+(%S+):%s*(%S+)')
+    local top_key, top_val = line:match('^(%S+):%s*(%S+)')
+    local section_key = line:match('^(%S+):$') or line:match('^(%S+):%s*$')
+    if nested_key and nested_val and section then
+      current[section .. '.' .. nested_key] = nested_val
+    elseif section_key then
+      section = section_key
+    elseif top_key and top_val then
+      current[top_key] = top_val
+      section = nil
     end
   end
 
-  if current['default_fqbn'] ~= board or current['default_port'] ~= port then
-    local file = io.open(yaml_file, 'w')
-    if file then
-      file:write('default_fqbn: ' .. board .. '\n')
-      file:write('default_port: ' .. port .. '\n')
-      file:close()
-    end
+  if
+    current['default_fqbn'] ~= board
+    or current['default_port'] ~= port
+    or current['port_config.baudrate'] ~= tostring(baudrate)
+  then
+    write_sketch_yaml(yaml_file, board, port, baudrate)
   end
 end
 
