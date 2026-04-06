@@ -357,40 +357,9 @@ function M.monitor()
     return
   end
 
-  local buf = vim.api.nvim_create_buf(false, true)
-  local win_width = math.floor(vim.o.columns * 0.8)
-  local win_height = math.floor(vim.o.lines * 0.8)
-  vim.api.nvim_open_win(buf, true, {
-    relative = 'editor',
-    width = win_width,
-    height = win_height,
-    row = math.floor((vim.o.lines - win_height) / 2),
-    col = math.floor((vim.o.columns - win_width) / 2),
-    style = 'minimal',
-    border = 'rounded',
-  })
-
-  local serial_cmd = string.format('arduino-cli monitor -p %s -b %s', M.port, M.board)
-
-  vim.fn.termopen(serial_cmd, {
-    cwd = vim.fn.expand('%:p:h'),
-    on_exit = function(_, code)
-      if code ~= 0 and vim.api.nvim_buf_is_valid(buf) then
-        vim.api.nvim_buf_set_lines(buf, -1, -1, false, {
-          '',
-          'Monitor exited with code: ' .. code,
-        })
-      end
-    end,
-  })
-
-  local keymap_opts = { buffer = buf, noremap = true, silent = true }
-  vim.keymap.set('t', '<C-c>', '<C-\\><C-n>:bd!<CR>', keymap_opts)
-  vim.keymap.set('n', '<C-c>', ':bd!<CR>', keymap_opts)
-  vim.keymap.set('t', '<Esc>', '<C-\\><C-n>:bd!<CR>', keymap_opts)
-  vim.keymap.set('n', '<Esc>', ':bd!<CR>', keymap_opts)
-
-  vim.cmd('startinsert')
+  local ui = require('Arduino-Nvim.ui')
+  local cmd = string.format('arduino-cli monitor -p %s -b %s', M.port, M.board)
+  ui.open_terminal(cmd, { cwd = vim.fn.expand('%:p:h') })
 end
 
 return M

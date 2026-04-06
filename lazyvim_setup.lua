@@ -2,7 +2,7 @@
 return {
   'yuukiflow/Arduino-Nvim',
   dependencies = {
-    'nvim-telescope/telescope.nvim', -- optional, falls back to vim.ui.select
+    'folke/snacks.nvim', -- optional, falls back to native vim.api + vim.ui.select
     'neovim/nvim-lspconfig',
   },
   ft = 'arduino',

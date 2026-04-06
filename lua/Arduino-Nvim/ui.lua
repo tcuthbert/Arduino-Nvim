@@ -1,5 +1,7 @@
 local M = {}
 
+local has_snacks, Snacks = pcall(require, 'snacks')
+
 ---Strip ANSI escape codes from a string
 ---@param line string
 ---@return string
@@ -7,11 +9,56 @@ function M.strip_ansi(line)
   return line:gsub('\27%[[0-9;]*m', '')
 end
 
----Create a floating window at the bottom of the screen
+---Split a string by newlines
+---@param input string
+---@return string[]
+local function split_lines(input)
+  local result = {}
+  for line in input:gmatch('[^\r\n]+') do
+    table.insert(result, line)
+  end
+  return result
+end
+
+---Adjust floating window height to fit content (native fallback)
+---@param win integer
+---@param buf integer
+---@param opts table
+local function adjust_window_height(win, buf, opts)
+  if not vim.api.nvim_win_is_valid(win) then
+    return
+  end
+  local line_count = vim.api.nvim_buf_line_count(buf)
+  local new_height = math.min(line_count, vim.o.lines - 2)
+  opts.height = new_height
+  opts.row = vim.o.lines - new_height - 2
+  vim.api.nvim_win_set_config(win, opts)
+end
+
+---Create a floating output window at the bottom of the screen
 ---@return integer buf
 ---@return integer win
 ---@return table opts
 function M.create_floating_monitor()
+  if has_snacks then
+    local swin = Snacks.win({
+      position = 'bottom',
+      height = 5,
+      border = 'rounded',
+      enter = true,
+      bo = { buftype = 'nofile', modifiable = true },
+      keys = {
+        ['<CR>'] = 'close',
+        q = 'close',
+      },
+    })
+    local buf = swin.buf
+    local win = swin.win
+    local opts = { _snacks_win = swin }
+    return buf, win, opts
+  end
+
+  -- Native fallback
   local width = vim.o.columns
   local height = 5
 
@@ -37,32 +84,6 @@ function M.create_floating_monitor()
   return buf, win, opts
 end
 
----Adjust floating window height to fit content
----@param win integer
----@param buf integer
----@param opts table
-local function adjust_window_height(win, buf, opts)
-  if not vim.api.nvim_win_is_valid(win) then
-    return
-  end
-  local line_count = vim.api.nvim_buf_line_count(buf)
-  local new_height = math.min(line_count, vim.o.lines - 2)
-  opts.height = new_height
-  opts.row = vim.o.lines - new_height - 2
-  vim.api.nvim_win_set_config(win, opts)
-end
-
----Split a string by newlines
----@param input string
----@return string[]
-local function split_lines(input)
-  local result = {}
-  for line in input:gmatch('[^\r\n]+') do
-    table.insert(result, line)
-  end
-  return result
-end
-
 ---Append lines to a floating buffer, stripping ANSI codes and adjusting height
 ---@param lines string|string[]
 ---@param buf integer
@@ -85,49 +106,40 @@ function M.append_to_buffer(lines, buf, win, opts)
       return
     end
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, cleaned)
-    adjust_window_height(win, buf, opts)
+
+    if opts._snacks_win then
+      -- Resize snacks window via raw handle
+      if vim.api.nvim_win_is_valid(win) then
+        local line_count = vim.api.nvim_buf_line_count(buf)
+        local new_height = math.min(line_count, vim.o.lines - 2)
+        vim.api.nvim_win_set_config(win, {
+          relative = 'editor',
+          width = vim.o.columns,
+          height = new_height,
+          row = vim.o.lines - new_height - 2,
+          col = 0,
+        })
+      end
+    else
+      adjust_window_height(win, buf, opts)
+    end
   end)
 end
 
----Show a selection picker, using Telescope if available, otherwise vim.ui.select
+---Show a selection picker, using snacks.picker if available, otherwise vim.ui.select
 ---@param items any[]
----@param picker_opts {prompt: string, format_item?: fun(item: any): string, ordinal?: fun(item: any): string, entry_maker?: fun(item: any): table}
+---@param picker_opts {prompt: string, format_item?: fun(item: any): string}
 ---@param on_choice fun(item: any)
 function M.pick(items, picker_opts, on_choice)
-  local has_telescope = pcall(require, 'telescope')
-  if has_telescope then
-    local pickers = require('telescope.pickers')
-    local finders = require('telescope.finders')
-    local conf = require('telescope.config').values
-    local actions = require('telescope.actions')
-    local action_state = require('telescope.actions.state')
-
-    pickers
-      .new({}, {
-        prompt_title = picker_opts.prompt,
-        finder = finders.new_table({
-          results = items,
-          entry_maker = picker_opts.entry_maker or function(item)
-            return {
-              value = item,
-              display = picker_opts.format_item and picker_opts.format_item(item) or tostring(item),
-              ordinal = picker_opts.ordinal and picker_opts.ordinal(item) or tostring(item),
-            }
-          end,
-        }),
-        sorter = conf.generic_sorter({}),
-        attach_mappings = function(prompt_bufnr)
-          actions.select_default:replace(function()
-            local sel = action_state.get_selected_entry()
-            actions.close(prompt_bufnr)
-            if sel then
-              on_choice(sel.value)
-            end
-          end)
-          return true
-        end,
-      })
-      :find()
+  if has_snacks and Snacks.picker then
+    Snacks.picker.select(items, {
+      prompt = picker_opts.prompt,
+      format_item = picker_opts.format_item or tostring,
+    }, function(item)
+      if item then
+        on_choice(item)
+      end
+    end)
   else
     vim.ui.select(items, {
       prompt = picker_opts.prompt,
@@ -138,6 +150,63 @@ function M.pick(items, picker_opts, on_choice)
       end
     end)
   end
+end
+
+---Open a floating terminal, using snacks.terminal if available
+---@param cmd string
+---@param term_opts? {cwd?: string, on_exit?: fun(job_id: integer, code: integer)}
+function M.open_terminal(cmd, term_opts)
+  term_opts = term_opts or {}
+
+  if has_snacks and Snacks.terminal then
+    Snacks.terminal.open(cmd, {
+      cwd = term_opts.cwd,
+      win = {
+        position = 'float',
+        width = 0.8,
+        height = 0.8,
+        border = 'rounded',
+      },
+    })
+    return
+  end
+
+  -- Native fallback
+  local buf = vim.api.nvim_create_buf(false, true)
+  local win_width = math.floor(vim.o.columns * 0.8)
+  local win_height = math.floor(vim.o.lines * 0.8)
+  vim.api.nvim_open_win(buf, true, {
+    relative = 'editor',
+    width = win_width,
+    height = win_height,
+    row = math.floor((vim.o.lines - win_height) / 2),
+    col = math.floor((vim.o.columns - win_width) / 2),
+    style = 'minimal',
+    border = 'rounded',
+  })
+
+  vim.fn.termopen(cmd, {
+    cwd = term_opts.cwd,
+    on_exit = function(_, code)
+      if term_opts.on_exit then
+        term_opts.on_exit(_, code)
+      end
+      if code ~= 0 and vim.api.nvim_buf_is_valid(buf) then
+        vim.api.nvim_buf_set_lines(buf, -1, -1, false, {
+          '',
+          'Exited with code: ' .. code,
+        })
+      end
+    end,
+  })
+
+  local keymap_opts = { buffer = buf, noremap = true, silent = true }
+  vim.keymap.set('t', '<C-c>', '<C-\\><C-n>:bd!<CR>', keymap_opts)
+  vim.keymap.set('n', '<C-c>', ':bd!<CR>', keymap_opts)
+  vim.keymap.set('t', '<Esc>', '<C-\\><C-n>:bd!<CR>', keymap_opts)
+  vim.keymap.set('n', '<Esc>', ':bd!<CR>', keymap_opts)
+
+  vim.cmd('startinsert')
 end
 
 ---Run a shell command asynchronously and call back with the output
