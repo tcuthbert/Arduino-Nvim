@@ -1,23 +1,29 @@
--- Minimal Arduino-Nvim setup for LazyVim
+-- Example LazyVim plugin spec for Arduino-Nvim
 return {
-	"yuukiflow/Arduino-Nvim",
-	dir = vim.fn.stdpath("config") .. "/lua/Arduino-Nvim",
-	dependencies = {
-		"nvim-telescope/telescope.nvim",
-		"neovim/nvim-lspconfig",
-	},
-	ft = "arduino",
-	config = function()
-		-- Set up LSP for Arduino files
-		require("Arduino-Nvim.lsp").setup()
+  'yuukiflow/Arduino-Nvim',
+  dependencies = {
+    'nvim-telescope/telescope.nvim', -- optional, falls back to vim.ui.select
+    'neovim/nvim-lspconfig',
+  },
+  ft = 'arduino',
+  config = function()
+    -- Optional: override defaults before any command runs
+    -- require('Arduino-Nvim').setup({
+    --   board = 'arduino:avr:uno',
+    --   port = '/dev/ttyUSB0',
+    --   baudrate = 115200,
+    -- })
 
-		-- Auto-load Arduino plugin for .ino files
-		vim.api.nvim_create_autocmd("FileType", {
-			pattern = "arduino",
-			callback = function()
-				require("Arduino-Nvim")
-			end,
-		})
-	end,
+    require('Arduino-Nvim.lsp').setup()
+  end,
+  keys = {
+    { '<Leader>au', '<Plug>(ArduinoUpload)', desc = 'Arduino Upload' },
+    { '<Leader>ac', '<Plug>(ArduinoCheck)', desc = 'Arduino Check' },
+    { '<Leader>as', '<Plug>(ArduinoStatus)', desc = 'Arduino Status' },
+    { '<Leader>ag', '<Plug>(ArduinoGUI)', desc = 'Arduino GUI' },
+    { '<Leader>am', '<Plug>(ArduinoMonitor)', desc = 'Arduino Monitor' },
+    { '<Leader>al', '<Plug>(ArduinoLib)', desc = 'Arduino Libraries' },
+    { '<Leader>ab', '<Plug>(ArduinoSelectBoard)', desc = 'Arduino Select Board' },
+    { '<Leader>ap', '<Plug>(ArduinoSelectPort)', desc = 'Arduino Select Port' },
+  },
 }
-
