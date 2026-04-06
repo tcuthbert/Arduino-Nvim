@@ -1,18 +1,18 @@
 ---@class ArduinoNvim
 local M = {}
 
+local SKETCH_YAML = 'sketch.yaml'
+
 ---@class ArduinoNvimConfig
 local defaults = {
   board = 'arduino:avr:uno',
   port = '/dev/ttyUSB0',
   baudrate = 115200,
-  config_file = '.arduino_config.lua',
 }
 
 M.board = defaults.board
 M.port = defaults.port
 M.baudrate = defaults.baudrate
-M.config_file = defaults.config_file
 
 local loaded = false
 
@@ -20,6 +20,28 @@ local loaded = false
 ---@return string
 local function trim(s)
   return s:match('^%s*(.-)%s*$')
+end
+
+---Parse sketch.yaml into a flat key table (supports one level of nesting)
+---@param path string
+---@return table<string, string>
+local function parse_sketch_yaml(path)
+  local values = {}
+  local section = nil
+  for line in io.lines(path) do
+    local nested_key, nested_val = line:match('^%s+(%S+):%s*(%S+)')
+    local top_key, top_val = line:match('^(%S+):%s*(%S+)')
+    local section_key = line:match('^(%S+):%s*$')
+    if nested_key and nested_val and section then
+      values[section .. '.' .. nested_key] = nested_val
+    elseif section_key then
+      section = section_key
+    elseif top_key and top_val then
+      values[top_key] = top_val
+      section = nil
+    end
+  end
+  return values
 end
 
 --- Ensure config is loaded on first command invocation
@@ -41,35 +63,29 @@ function M.setup(opts)
   loaded = true
 end
 
----Load config from project-local file, merging with current state
+---Load config from sketch.yaml, merging with current state
 function M.load_config()
-  if vim.fn.filereadable(M.config_file) == 0 then
+  if vim.fn.filereadable(SKETCH_YAML) == 0 then
     return
   end
 
-  local fn = loadfile(M.config_file)
-  if fn then
-    local ok, settings = pcall(fn)
-    if ok and settings then
-      M.board = settings.board or M.board
-      M.port = settings.port or M.port
-      M.baudrate = settings.baudrate or M.baudrate
-    end
-  end
+  local values = parse_sketch_yaml(SKETCH_YAML)
+  M.board = values['default_fqbn'] or M.board
+  M.port = values['default_port'] or M.port
+  M.baudrate = values['port_config.baudrate'] or M.baudrate
 end
 
----Save current config to project-local file
+---Save current config to sketch.yaml
 function M.save_config()
-  local file = io.open(M.config_file, 'w')
+  local file = io.open(SKETCH_YAML, 'w')
   if not file then
-    vim.notify('Cannot write to config file.', vim.log.levels.ERROR)
+    vim.notify('Cannot write to ' .. SKETCH_YAML, vim.log.levels.ERROR)
     return
   end
-  file:write('return {\n')
-  file:write(string.format('  board = %q,\n', M.board))
-  file:write(string.format('  port = %q,\n', M.port))
-  file:write(string.format('  baudrate = %q,\n', M.baudrate))
-  file:write('}\n')
+  file:write('default_fqbn: ' .. M.board .. '\n')
+  file:write('default_port: ' .. M.port .. '\n')
+  file:write('port_config:\n')
+  file:write('  baudrate: ' .. tostring(M.baudrate) .. '\n')
   file:close()
 end
 
