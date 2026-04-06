@@ -195,30 +195,58 @@ function M.pick(items, picker_opts, on_choice)
   end
 end
 
----Open a terminal in a bottom split for persistent monitoring alongside code
+---Open a terminal for serial monitoring
 ---@param cmd string
----@param term_opts? {cwd?: string, on_exit?: fun(job_id: integer, code: integer)}
+---@param term_opts? {cwd?: string, mode?: 'split'|'float', on_exit?: fun(job_id: integer, code: integer)}
 function M.open_terminal(cmd, term_opts)
   term_opts = term_opts or {}
+  local mode = term_opts.mode or 'split'
 
   if has_snacks and Snacks.terminal then
+    local win_config = mode == 'float' and {
+      position = 'float',
+      width = 0.8,
+      height = 0.8,
+      border = 'rounded',
+      title = ' Serial Monitor ',
+      title_pos = 'center',
+    } or {
+      position = 'bottom',
+      height = 0.3,
+      border = 'top',
+      title = ' Serial Monitor ',
+      title_pos = 'center',
+    }
     Snacks.terminal.open(cmd, {
       cwd = term_opts.cwd,
-      win = {
-        position = 'bottom',
-        height = 0.3,
-        border = 'top',
-        title = ' Serial Monitor ',
-        title_pos = 'center',
-      },
+      win = win_config,
     })
     return
   end
 
-  -- Native fallback: horizontal split at the bottom
-  vim.cmd('botright ' .. math.floor(vim.o.lines * 0.3) .. 'split')
-  local buf = vim.api.nvim_get_current_buf()
-  local win = vim.api.nvim_get_current_win()
+  -- Native fallback
+  local buf, win
+  if mode == 'float' then
+    buf = vim.api.nvim_create_buf(false, true)
+    local win_width = math.floor(vim.o.columns * 0.8)
+    local win_height = math.floor(vim.o.lines * 0.8)
+    win = vim.api.nvim_open_win(buf, true, {
+      relative = 'editor',
+      width = win_width,
+      height = win_height,
+      row = math.floor((vim.o.lines - win_height) / 2),
+      col = math.floor((vim.o.columns - win_width) / 2),
+      style = 'minimal',
+      border = 'rounded',
+      title = ' Serial Monitor ',
+      title_pos = 'center',
+    })
+  else
+    vim.cmd('botright ' .. math.floor(vim.o.lines * 0.3) .. 'split')
+    buf = vim.api.nvim_get_current_buf()
+    win = vim.api.nvim_get_current_win()
+    vim.api.nvim_set_option_value('winfixheight', true, { win = win })
+  end
 
   vim.fn.termopen(cmd, {
     cwd = term_opts.cwd,
@@ -236,7 +264,6 @@ function M.open_terminal(cmd, term_opts)
   })
 
   vim.api.nvim_buf_set_name(buf, 'Serial Monitor')
-  vim.api.nvim_set_option_value('winfixheight', true, { win = win })
 
   local keymap_opts = { buffer = buf, noremap = true, silent = true }
   vim.keymap.set('t', '<C-c>', '<C-\\><C-n>:bd!<CR>', keymap_opts)

@@ -12,6 +12,7 @@ return {
     --   board = 'arduino:avr:uno',
     --   port = '/dev/ttyUSB0',
     --   baudrate = 115200,
+    --   monitor_mode = 'split', -- 'split' (default) or 'float'
     -- })
 
     require('Arduino-Nvim.lsp').setup()

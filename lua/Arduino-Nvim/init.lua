@@ -8,11 +8,13 @@ local defaults = {
   board = 'arduino:avr:uno',
   port = '/dev/ttyUSB0',
   baudrate = 115200,
+  monitor_mode = 'split', -- 'split' or 'float'
 }
 
 M.board = defaults.board
 M.port = defaults.port
 M.baudrate = defaults.baudrate
+M.monitor_mode = defaults.monitor_mode
 
 local loaded = false
 
@@ -359,7 +361,10 @@ function M.monitor()
 
   local ui = require('Arduino-Nvim.ui')
   local cmd = string.format('arduino-cli monitor -p %s -b %s', M.port, M.board)
-  ui.open_terminal(cmd, { cwd = vim.fn.expand('%:p:h') })
+  ui.open_terminal(cmd, {
+    cwd = vim.fn.expand('%:p:h'),
+    mode = M.monitor_mode,
+  })
 end
 
 return M
