@@ -22,7 +22,7 @@ return {
     { '<Leader>ac', '<Plug>(ArduinoCheck)', desc = 'Arduino Check' },
     { '<Leader>as', '<Plug>(ArduinoStatus)', desc = 'Arduino Status' },
     { '<Leader>ag', '<Plug>(ArduinoGUI)', desc = 'Arduino GUI' },
-    { '<Leader>am', '<Plug>(ArduinoMonitor)', desc = 'Arduino Monitor' },
+    { '<Leader>am', '<Plug>(ArduinoMonitor)', mode = { 'n', 't' }, desc = 'Arduino Monitor (toggle)' },
     { '<Leader>al', '<Plug>(ArduinoLib)', desc = 'Arduino Libraries' },
     { '<Leader>ab', '<Plug>(ArduinoSelectBoard)', desc = 'Arduino Select Board' },
     { '<Leader>ap', '<Plug>(ArduinoSelectPort)', desc = 'Arduino Select Port' },

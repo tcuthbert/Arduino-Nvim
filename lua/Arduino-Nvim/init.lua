@@ -361,7 +361,7 @@ function M.monitor()
 
   local ui = require('Arduino-Nvim.ui')
   local cmd = string.format('arduino-cli monitor -p %s -b %s', M.port, M.board)
-  ui.open_terminal(cmd, {
+  ui.toggle_terminal(cmd, {
     cwd = vim.fn.expand('%:p:h'),
     mode = M.monitor_mode,
   })

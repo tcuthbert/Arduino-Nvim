@@ -16,8 +16,14 @@ end)
 vim.keymap.set('n', '<Plug>(ArduinoGUI)', function()
   require('Arduino-Nvim').gui()
 end)
-vim.keymap.set('n', '<Plug>(ArduinoMonitor)', function()
-  require('Arduino-Nvim').monitor()
+vim.keymap.set({ 'n', 't' }, '<Plug>(ArduinoMonitor)', function()
+  -- Escape terminal mode first if we're in it
+  if vim.fn.mode() == 't' then
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<C-\\><C-n>', true, false, true), 'n', false)
+  end
+  vim.schedule(function()
+    require('Arduino-Nvim').monitor()
+  end)
 end)
 vim.keymap.set('n', '<Plug>(ArduinoLib)', function()
   require('Arduino-Nvim.lib').library_manager()

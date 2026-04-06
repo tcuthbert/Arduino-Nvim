@@ -195,10 +195,14 @@ function M.pick(items, picker_opts, on_choice)
   end
 end
 
----Open a terminal for serial monitoring
+-- Track the native monitor state for toggling
+---@type {buf: integer, win: integer}|nil
+local monitor_state = nil
+
+---Toggle a terminal for serial monitoring
 ---@param cmd string
 ---@param term_opts? {cwd?: string, mode?: 'split'|'float', on_exit?: fun(job_id: integer, code: integer)}
-function M.open_terminal(cmd, term_opts)
+function M.toggle_terminal(cmd, term_opts)
   term_opts = term_opts or {}
   local mode = term_opts.mode or 'split'
 
@@ -217,14 +221,53 @@ function M.open_terminal(cmd, term_opts)
       title = ' Serial Monitor ',
       title_pos = 'center',
     }
-    Snacks.terminal.open(cmd, {
+    Snacks.terminal.toggle(cmd, {
       cwd = term_opts.cwd,
       win = win_config,
     })
     return
   end
 
-  -- Native fallback
+  -- Native fallback: toggle existing monitor
+  if monitor_state then
+    local buf = monitor_state.buf
+    local win = monitor_state.win
+    if vim.api.nvim_buf_is_valid(buf) and vim.api.nvim_win_is_valid(win) then
+      -- Visible — hide it
+      vim.api.nvim_win_hide(win)
+      monitor_state.win = -1
+      return
+    elseif vim.api.nvim_buf_is_valid(buf) then
+      -- Buffer alive but window closed — reopen it
+      if mode == 'float' then
+        local win_width = math.floor(vim.o.columns * 0.8)
+        local win_height = math.floor(vim.o.lines * 0.8)
+        win = vim.api.nvim_open_win(buf, true, {
+          relative = 'editor',
+          width = win_width,
+          height = win_height,
+          row = math.floor((vim.o.lines - win_height) / 2),
+          col = math.floor((vim.o.columns - win_width) / 2),
+          style = 'minimal',
+          border = 'rounded',
+          title = ' Serial Monitor ',
+          title_pos = 'center',
+        })
+      else
+        vim.cmd('botright ' .. math.floor(vim.o.lines * 0.3) .. 'split')
+        vim.api.nvim_win_set_buf(vim.api.nvim_get_current_win(), buf)
+        win = vim.api.nvim_get_current_win()
+        vim.api.nvim_set_option_value('winfixheight', true, { win = win })
+      end
+      monitor_state.win = win
+      vim.cmd('startinsert')
+      return
+    end
+    -- Buffer is dead, fall through to create a new one
+    monitor_state = nil
+  end
+
+  -- Create new terminal
   local buf, win
   if mode == 'float' then
     buf = vim.api.nvim_create_buf(false, true)
@@ -251,6 +294,7 @@ function M.open_terminal(cmd, term_opts)
   vim.fn.termopen(cmd, {
     cwd = term_opts.cwd,
     on_exit = function(_, code)
+      monitor_state = nil
       if term_opts.on_exit then
         term_opts.on_exit(_, code)
       end
@@ -264,12 +308,7 @@ function M.open_terminal(cmd, term_opts)
   })
 
   vim.api.nvim_buf_set_name(buf, 'Serial Monitor')
-
-  local keymap_opts = { buffer = buf, noremap = true, silent = true }
-  vim.keymap.set('t', '<C-c>', '<C-\\><C-n>:bd!<CR>', keymap_opts)
-  vim.keymap.set('n', '<C-c>', ':bd!<CR>', keymap_opts)
-  vim.keymap.set('t', '<Esc>', '<C-\\><C-n>:bd!<CR>', keymap_opts)
-  vim.keymap.set('n', '<Esc>', ':bd!<CR>', keymap_opts)
+  monitor_state = { buf = buf, win = win }
 
   vim.cmd('startinsert')
 end
