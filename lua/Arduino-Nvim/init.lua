@@ -122,7 +122,7 @@ end
 function M.status()
   ensure_loaded()
   local ui = require('Arduino-Nvim.ui')
-  local buf, win, opts = ui.create_floating_monitor()
+  local buf, win, opts = ui.create_floating_monitor('Arduino Status')
   ui.append_to_buffer({
     string.format('Board: %s', M.board),
     string.format('Port: %s', M.port),
@@ -137,7 +137,7 @@ function M.check()
   end
 
   local ui = require('Arduino-Nvim.ui')
-  local buf, win, opts = ui.create_floating_monitor()
+  local buf, win, opts = ui.create_floating_monitor('Compile')
   local cmd = 'arduino-cli compile --fqbn '
     .. M.board
     .. ' '
@@ -179,7 +179,7 @@ function M.upload()
   end
 
   local ui = require('Arduino-Nvim.ui')
-  local buf, win, opts = ui.create_floating_monitor()
+  local buf, win, opts = ui.create_floating_monitor('Compile & Upload')
   local dir = vim.fn.fnameescape(vim.fn.expand('%:p:h'))
 
   local compile_cmd = 'arduino-cli compile --fqbn ' .. M.board .. ' ' .. dir
@@ -251,7 +251,7 @@ function M.list_ports()
   end
 
   local ui = require('Arduino-Nvim.ui')
-  local buf, win, opts = ui.create_floating_monitor()
+  local buf, win, opts = ui.create_floating_monitor('Connected Boards')
 
   vim.fn.jobstart('arduino-cli board list', {
     stdout_buffered = true,

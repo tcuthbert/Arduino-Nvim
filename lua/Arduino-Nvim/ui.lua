@@ -2,6 +2,9 @@ local M = {}
 
 local has_snacks, Snacks = pcall(require, 'snacks')
 
+local MAX_HEIGHT_RATIO = 0.6
+local MIN_HEIGHT = 5
+
 ---Strip ANSI escape codes from a string
 ---@param line string
 ---@return string
@@ -20,6 +23,14 @@ local function split_lines(input)
   return result
 end
 
+---Compute clamped height for the output window
+---@param line_count integer
+---@return integer
+local function clamped_height(line_count)
+  local max_h = math.floor(vim.o.lines * MAX_HEIGHT_RATIO)
+  return math.max(MIN_HEIGHT, math.min(line_count, max_h))
+end
+
 ---Adjust floating window height to fit content (native fallback)
 ---@param win integer
 ---@param buf integer
@@ -29,24 +40,35 @@ local function adjust_window_height(win, buf, opts)
     return
   end
   local line_count = vim.api.nvim_buf_line_count(buf)
-  local new_height = math.min(line_count, vim.o.lines - 2)
+  local new_height = clamped_height(line_count)
   opts.height = new_height
   opts.row = vim.o.lines - new_height - 2
   vim.api.nvim_win_set_config(win, opts)
 end
 
 ---Create a floating output window at the bottom of the screen
+---@param title? string Window title displayed in the border
 ---@return integer buf
 ---@return integer win
 ---@return table opts
-function M.create_floating_monitor()
+function M.create_floating_monitor(title)
+  title = title or 'Arduino'
+
   if has_snacks then
     local swin = Snacks.win({
       position = 'bottom',
-      height = 5,
+      height = MIN_HEIGHT,
       border = 'rounded',
+      title = ' ' .. title .. ' ',
+      title_pos = 'center',
       enter = true,
       bo = { buftype = 'nofile', modifiable = true },
+      wo = {
+        wrap = false,
+        number = false,
+        signcolumn = 'no',
+        cursorline = true,
+      },
       keys = {
         ['<CR>'] = 'close',
         q = 'close',
@@ -60,22 +82,31 @@ function M.create_floating_monitor()
 
   -- Native fallback
   local width = vim.o.columns
-  local height = 5
-
   local buf = vim.api.nvim_create_buf(false, true)
   local opts = {
     relative = 'editor',
     width = width,
-    height = height,
-    row = vim.o.lines - height - 2,
+    height = MIN_HEIGHT,
+    row = vim.o.lines - MIN_HEIGHT - 2,
     col = 0,
     style = 'minimal',
     border = 'rounded',
+    title = ' ' .. title .. ' ',
+    title_pos = 'center',
   }
 
   local win = vim.api.nvim_open_win(buf, true, opts)
 
+  vim.api.nvim_set_option_value('wrap', false, { win = win })
+  vim.api.nvim_set_option_value('cursorline', true, { win = win })
+
   vim.keymap.set('n', '<CR>', function()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, false)
+    end
+  end, { buffer = buf, silent = true })
+
+  vim.keymap.set('n', 'q', function()
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, false)
     end
@@ -107,11 +138,16 @@ function M.append_to_buffer(lines, buf, win, opts)
     end
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, cleaned)
 
+    -- Scroll to bottom
+    if vim.api.nvim_win_is_valid(win) then
+      local last_line = vim.api.nvim_buf_line_count(buf)
+      vim.api.nvim_win_set_cursor(win, { last_line, 0 })
+    end
+
     if opts._snacks_win then
-      -- Resize snacks window via raw handle
       if vim.api.nvim_win_is_valid(win) then
         local line_count = vim.api.nvim_buf_line_count(buf)
-        local new_height = math.min(line_count, vim.o.lines - 2)
+        local new_height = clamped_height(line_count)
         vim.api.nvim_win_set_config(win, {
           relative = 'editor',
           width = vim.o.columns,
@@ -166,6 +202,8 @@ function M.open_terminal(cmd, term_opts)
         width = 0.8,
         height = 0.8,
         border = 'rounded',
+        title = ' Serial Monitor ',
+        title_pos = 'center',
       },
     })
     return
@@ -183,6 +221,8 @@ function M.open_terminal(cmd, term_opts)
     col = math.floor((vim.o.columns - win_width) / 2),
     style = 'minimal',
     border = 'rounded',
+    title = ' Serial Monitor ',
+    title_pos = 'center',
   })
 
   vim.fn.termopen(cmd, {
